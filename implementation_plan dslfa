@@ -1,0 +1,312 @@
+# DSLFA Phase 1 — Implementation Plan
+
+## Architecture Overview
+
+```mermaid
+graph TB
+    subgraph Frontend["Frontend (React + Vite)"]
+        UI[React Components] --> Router[React Router]
+        UI --> State[Context API]
+        UI --> API[Axios API Layer]
+    end
+
+    subgraph Backend["Backend (Flask)"]
+        Routes[Flask Routes] --> Services[Service Layer]
+        Services --> Models[SQLAlchemy Models]
+        Services --> AI[AI Pipeline]
+        AI --> LangChain[LangChain + LangGraph]
+        LangChain --> VectorDB[ChromaDB]
+        LangChain --> LLM[Gemini / OpenAI / Ollama]
+    end
+
+    subgraph Storage["Storage"]
+        DB[(PostgreSQL)]
+        VectorDB
+        FileStore[Local File Storage]
+    end
+
+    API -->|HTTP/REST| Routes
+    Models --> DB
+    Services --> FileStore
+```
+
+## Folder Structure
+
+```
+dslfa/
+├── backend/
+│   ├── app/
+│   │   ├── __init__.py              # Flask app factory
+│   │   ├── config.py                # Configuration classes
+│   │   ├── extensions.py            # Flask extensions init
+│   │   ├── models/
+│   │   │   ├── __init__.py
+│   │   │   ├── user.py              # User model
+│   │   │   ├── document.py          # Document model
+│   │   │   ├── summary.py           # Summary model
+│   │   │   ├── flashcard.py         # Flashcard + SRS model
+│   │   │   ├── quiz.py              # Quiz, Question, Attempt models
+│   │   │   └── chat.py              # Chat session model
+│   │   ├── routes/
+│   │   │   ├── __init__.py
+│   │   │   ├── auth.py              # Auth endpoints
+│   │   │   ├── documents.py         # Upload + list endpoints
+│   │   │   ├── ai.py                # AI generation endpoints
+│   │   │   ├── flashcards.py        # Flashcard + SRS endpoints
+│   │   │   ├── quizzes.py           # Quiz endpoints
+│   │   │   ├── chat.py              # AI tutor chat endpoints
+│   │   │   └── analytics.py         # Analytics endpoints
+│   │   ├── services/
+│   │   │   ├── __init__.py
+│   │   │   ├── document_parser.py   # PDF/DOCX/PPTX parsing
+│   │   │   ├── embedding_service.py # Chunking + embedding
+│   │   │   ├── ai_service.py        # LangChain pipelines
+│   │   │   ├── quiz_service.py      # Quiz generation + grading
+│   │   │   ├── srs_service.py       # SM-2 spaced repetition
+│   │   │   └── analytics_service.py # Analytics aggregation
+│   │   └── utils/
+│   │       ├── __init__.py
+│   │       └── helpers.py           # Common helpers
+│   ├── migrations/                  # Alembic migrations
+│   ├── uploads/                     # Uploaded files storage
+│   ├── chroma_db/                   # ChromaDB persistent storage
+│   ├── requirements.txt
+│   ├── run.py                       # Entry point
+│   ├── .env.example
+│   └── Dockerfile
+├── frontend/
+│   ├── src/
+│   │   ├── api/
+│   │   │   └── index.js             # Axios instance + API functions
+│   │   ├── components/
+│   │   │   ├── layout/
+│   │   │   │   ├── Sidebar.jsx
+│   │   │   │   ├── Navbar.jsx
+│   │   │   │   └── Layout.jsx
+│   │   │   ├── cards/
+│   │   │   │   ├── SummaryCard.jsx
+│   │   │   │   ├── FlashCard.jsx
+│   │   │   │   ├── QuizCard.jsx
+│   │   │   │   └── StatCard.jsx
+│   │   │   ├── ui/
+│   │   │   │   ├── Button.jsx
+│   │   │   │   ├── Input.jsx
+│   │   │   │   ├── Modal.jsx
+│   │   │   │   ├── Toast.jsx
+│   │   │   │   ├── Skeleton.jsx
+│   │   │   │   └── EmptyState.jsx
+│   │   │   └── charts/
+│   │   │       ├── RadarChart.jsx
+│   │   │       └── ProgressChart.jsx
+│   │   ├── context/
+│   │   │   ├── AuthContext.jsx
+│   │   │   └── ThemeContext.jsx
+│   │   ├── hooks/
+│   │   │   ├── useAuth.js
+│   │   │   └── useToast.js
+│   │   ├── pages/
+│   │   │   ├── Login.jsx
+│   │   │   ├── Register.jsx
+│   │   │   ├── Dashboard.jsx
+│   │   │   ├── Notes.jsx
+│   │   │   ├── NoteSummary.jsx
+│   │   │   ├── Flashcards.jsx
+│   │   │   ├── FlashcardReview.jsx
+│   │   │   ├── Quizzes.jsx
+│   │   │   ├── QuizAttempt.jsx
+│   │   │   ├── QuizResults.jsx
+│   │   │   ├── AiTutor.jsx
+│   │   │   └── Analytics.jsx
+│   │   ├── App.jsx
+│   │   ├── main.jsx
+│   │   └── index.css
+│   ├── public/
+│   ├── index.html
+│   ├── package.json
+│   ├── vite.config.js
+│   ├── tailwind.config.js
+│   ├── postcss.config.js
+│   └── Dockerfile
+├── docker-compose.yml
+├── .env.example
+└── README.md
+```
+
+## Database Schema
+
+```mermaid
+erDiagram
+    users {
+        int id PK
+        string name
+        string email UK
+        string password_hash
+        datetime created_at
+        int study_streak
+        date last_study_date
+    }
+
+    documents {
+        int id PK
+        int user_id FK
+        string title
+        string file_type
+        string file_path
+        string status
+        datetime created_at
+    }
+
+    summaries {
+        int id PK
+        int document_id FK
+        int user_id FK
+        text summary_text
+        json key_concepts
+        json formulas
+        json exam_topics
+        datetime created_at
+    }
+
+    flashcards {
+        int id PK
+        int user_id FK
+        int document_id FK
+        string question
+        string answer
+        string topic_tag
+        float ease_factor
+        int interval_days
+        int repetitions
+        datetime next_review
+        datetime created_at
+    }
+
+    quizzes {
+        int id PK
+        int user_id FK
+        int document_id FK
+        string title
+        int total_questions
+        datetime created_at
+    }
+
+    questions {
+        int id PK
+        int quiz_id FK
+        string type
+        string text
+        json options
+        string correct_answer
+        string topic_tag
+        string bloom_level
+    }
+
+    quiz_attempts {
+        int id PK
+        int user_id FK
+        int quiz_id FK
+        float score
+        json weak_topics
+        datetime attempted_at
+    }
+
+    question_responses {
+        int id PK
+        int attempt_id FK
+        int question_id FK
+        string student_answer
+        boolean is_correct
+    }
+
+    chat_sessions {
+        int id PK
+        int user_id FK
+        int document_id FK
+        json messages
+        datetime updated_at
+    }
+
+    users ||--o{ documents : uploads
+    users ||--o{ summaries : has
+    users ||--o{ flashcards : studies
+    users ||--o{ quizzes : takes
+    users ||--o{ chat_sessions : chats
+    documents ||--o{ summaries : generates
+    documents ||--o{ flashcards : generates
+    documents ||--o{ quizzes : generates
+    quizzes ||--o{ questions : contains
+    quizzes ||--o{ quiz_attempts : has
+    quiz_attempts ||--o{ question_responses : contains
+```
+
+## API Routes
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/auth/register` | Register new student |
+| POST | `/api/auth/login` | Login, returns JWT |
+| GET | `/api/auth/me` | Get current user profile |
+| POST | `/api/documents/upload` | Upload document (PDF/DOCX/PPTX/TXT) |
+| GET | `/api/documents` | List user's documents |
+| GET | `/api/documents/:id` | Get document details |
+| DELETE | `/api/documents/:id` | Delete document |
+| POST | `/api/ai/summarize/:doc_id` | Generate summary for document |
+| GET | `/api/ai/summary/:doc_id` | Get existing summary |
+| POST | `/api/flashcards/generate/:doc_id` | Generate flashcards from document |
+| GET | `/api/flashcards` | Get all flashcards (with filters) |
+| GET | `/api/flashcards/due` | Get due flashcards for review |
+| PUT | `/api/flashcards/:id/review` | Submit SRS review rating |
+| POST | `/api/quizzes/generate/:doc_id` | Generate quiz from document |
+| GET | `/api/quizzes` | List all quizzes |
+| GET | `/api/quizzes/:id` | Get quiz with questions |
+| POST | `/api/quizzes/:id/attempt` | Submit quiz attempt |
+| GET | `/api/quizzes/:id/results/:attempt_id` | Get quiz results + weak topics |
+| POST | `/api/chat/message` | Send message to AI tutor |
+| GET | `/api/chat/sessions` | List chat sessions |
+| GET | `/api/chat/sessions/:id` | Get chat session history |
+| GET | `/api/analytics/overview` | Get dashboard analytics |
+| GET | `/api/analytics/progress` | Get progress timeline |
+
+## AI Pipeline Design
+
+```mermaid
+graph LR
+    Upload[Document Upload] --> Parse[Parse Document]
+    Parse --> Chunk[Chunk Text<br/>RecursiveCharacterTextSplitter]
+    Chunk --> Embed[Generate Embeddings<br/>Gemini Embeddings]
+    Embed --> Store[Store in ChromaDB]
+
+    subgraph Generation["On-Demand Generation"]
+        Store --> RAG[RAG Retrieval]
+        RAG --> Summary[Summary Chain]
+        RAG --> Flash[Flashcard Chain]
+        RAG --> Quiz[Quiz Chain]
+        RAG --> Chat[Chat Chain]
+    end
+```
+
+## Build Order
+
+| Step | Feature | Backend | Frontend | Priority |
+|------|---------|---------|----------|----------|
+| 1 | Auth + Dashboard Shell | User model, Auth routes, JWT | Login, Register, Dashboard layout | 🔴 Critical |
+| 2 | File Upload + Parsing | Upload route, Document parser | Upload UI, Notes list | 🔴 Critical |
+| 3 | Embeddings + Vector DB | ChromaDB setup, Embedding service | — | 🔴 Critical |
+| 4 | AI Summaries | Summary chain, Summary routes | Summary view | 🔴 Critical |
+| 5 | Flashcards + SRS | Flashcard model, SM-2 logic | Flashcard review UI | 🟡 High |
+| 6 | Quiz Engine | Quiz generation, Grading | Quiz attempt UI | 🟡 High |
+| 7 | Weak Topic Analysis | Analysis service | Results + weak topics UI | 🟡 High |
+| 8 | AI Tutor Chat | RAG chat chain | Chat interface | 🟢 Medium |
+| 9 | Analytics + Polish | Analytics aggregation | Charts, progress views | 🟢 Medium |
+
+## Key Design Decisions
+
+1. **Gemini as default LLM** — Using `langchain-google-genai` with Gemini embeddings and chat models. Switchable to OpenAI/Ollama via env var.
+2. **ChromaDB for vectors** — Lightweight, file-based, no separate server needed for MVP.
+3. **SM-2 Algorithm** — Proven spaced repetition algorithm (same as Anki).
+4. **Synchronous AI calls for MVP** — No Celery/RQ initially; will add for scaling.
+5. **Context API over Redux** — Simpler state management for MVP scope.
+6. **Vite over CRA** — Faster dev server and builds.
+
+> [!IMPORTANT]
+> This plan focuses exclusively on the **student-facing MVP**. Teacher dashboards, classroom features, and college analytics are deferred to Phase 2+.
