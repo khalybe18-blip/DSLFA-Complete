@@ -310,3 +310,35 @@ graph LR
 
 > [!IMPORTANT]
 > This plan focuses exclusively on the **student-facing MVP**. Teacher dashboards, classroom features, and college analytics are deferred to Phase 2+.
+
+'''
+
+PROCESS TO START AND END THE SERVERS:
+
+1. To Start the Backend (Flask)
+Open a terminal in the project root and run:
+
+
+cd backend; .\venv\Scripts\python -m flask run --host=127.0.0.1 --port=5000 --debug
+
+2. To Start the Frontend (Vite)
+
+Open a new terminal tab/window in the project root and run:
+
+
+cd frontend; npm run dev
+3. To Force Stop Everything (If things freeze)
+
+
+If you can't close the servers normally, run this in PowerShell to force-kill the processes on those ports:
+
+
+# Kill Backend (Port 5000)
+Stop-Process -Id (Get-NetTCPConnection -LocalPort 5000).OwningProcess -Force
+
+# Kill Frontend (Port 5173)
+Stop-Process -Id (Get-NetTCPConnection -LocalPort 5173).OwningProcess -Force
+
+
+Your system is now ready for a fresh study session! Give the browser a refresh and everything should be working perfectly.
+
