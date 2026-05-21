@@ -14,6 +14,8 @@ const DECK_GRADIENTS = [
   'from-indigo-500 to-purple-500',
 ];
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+
 const FlashcardDashboard = () => {
   const [documents, setDocuments] = useState([]);
   const [loadingDocs, setLoadingDocs] = useState(true);
@@ -36,7 +38,7 @@ const FlashcardDashboard = () => {
   const fetchDocuments = async () => {
     try {
       setFetchError('');
-      const response = await axios.get('http://localhost:5000/api/documents');
+      const response = await axios.get(`${API_BASE}/api/documents`);
       if (response.data && response.data.documents) {
         setDocuments(response.data.documents);
       } else {
@@ -52,7 +54,7 @@ const FlashcardDashboard = () => {
 
   const fetchLibrary = async () => {
     try {
-      const response = await axios.get('http://localhost:5000/api/flashcards/library');
+      const response = await axios.get(`${API_BASE}/api/flashcards/library`);
       setSavedDecks(response.data.decks || []);
     } catch (error) {
       console.error('Failed to fetch flashcard library', error);
@@ -64,7 +66,7 @@ const FlashcardDashboard = () => {
   const handleGenerate = async (selectedDocIds, preferences) => {
     setPageState('generating');
     try {
-      const response = await axios.post('http://localhost:5000/api/flashcards/generate', {
+      const response = await axios.post(`${API_BASE}/api/flashcards/generate`, {
         documentIds: selectedDocIds,
         preferences: preferences,
       });
@@ -80,7 +82,7 @@ const FlashcardDashboard = () => {
 
   const handleOpenSavedDeck = async (deckId) => {
     try {
-      const response = await axios.get(`http://localhost:5000/api/flashcards/library/${deckId}`);
+      const response = await axios.get(`${API_BASE}/api/flashcards/library/${deckId}`);
       setDeckData(response.data.deck.deckData);
       setActiveDeckId(deckId);
       setPageState('viewing');
@@ -93,7 +95,7 @@ const FlashcardDashboard = () => {
   const handleDeleteDeck = async (deckId) => {
     if (!window.confirm('Delete this flashcard deck permanently?')) return;
     try {
-      await axios.delete(`http://localhost:5000/api/flashcards/library/${deckId}`);
+      await axios.delete(`${API_BASE}/api/flashcards/library/${deckId}`);
       setSavedDecks(prev => prev.filter(d => d.id !== deckId));
     } catch (e) {
       console.error('Failed to delete deck', e);

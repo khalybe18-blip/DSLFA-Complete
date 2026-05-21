@@ -104,6 +104,8 @@ const SectionRenderer = ({ section, colorIndex }) => {
   );
 };
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+
 const NoteSummary = () => {
   const { id } = useParams();
   const [summary, setSummary] = useState(null);
@@ -113,7 +115,7 @@ const NoteSummary = () => {
   useEffect(() => {
     const fetchSummary = async () => {
       try {
-        const response = await axios.get(`http://localhost:5000/api/ai/summary/${id}`);
+        const response = await axios.get(`${API_BASE}/api/ai/summary/${id}`);
         setSummary(response.data.summary);
       } catch (err) {
         setError(err.response?.data?.message || 'Failed to fetch summary');

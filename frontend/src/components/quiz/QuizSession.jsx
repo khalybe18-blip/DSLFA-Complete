@@ -75,7 +75,7 @@ const QuizSession = ({ quizData, onSubmit, onCancel }) => {
       </div>
 
       {/* Question Card */}
-      <div className="bg-white dark:bg-slate-800 p-8 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm transition-colors">
+      <div className="bento-card p-8 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm transition-colors">
         <span className="inline-block px-3 py-1 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 font-semibold text-xs rounded-full uppercase tracking-wide mb-4">
           {currentQ.type}
         </span>
@@ -122,7 +122,7 @@ const QuizSession = ({ quizData, onSubmit, onCancel }) => {
         <button
           onClick={handlePrev}
           disabled={currentIndex === 0}
-          className="flex items-center gap-2 px-6 py-3 rounded-xl font-medium text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 transition-colors"
+          className="flex items-center gap-2 px-6 py-3 rounded-xl font-medium text-slate-600 dark:text-slate-300 bento-card border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 transition-colors"
         >
           <ArrowLeft size={18} /> Previous
         </button>

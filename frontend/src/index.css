@@ -1,9 +1,53 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 @import "tailwindcss";
 
 @custom-variant dark (&:is(.dark *));
 
+@theme {
+  --color-obsidian-black: #0a0d14;
+  --color-charcoal-gray: #161b26;
+  --color-slate-gray: #94a3b8;
+  --color-border-gray: #242b3d;
+  
+  --color-light-canvas: #f8fafc;
+  --color-light-card: #ffffff;
+  --color-light-border: #e2e8f0;
+  --color-light-text: #64748b;
+  --color-light-heading: #0f172a;
+
+  --color-coral-orange: #ff6b35;
+}
+
 @layer base {
   body {
-    @apply transition-colors duration-300;
+    @apply transition-colors duration-300 bg-light-canvas dark:bg-obsidian-black text-light-text dark:text-slate-gray;
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    letter-spacing: -0.02em;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply text-light-heading dark:text-[#f1f5f9] font-bold;
+  }
+}
+
+@layer components {
+  .bento-card {
+    @apply bg-[#ffffff] dark:bg-[rgba(30,41,59,0.45)] dark:backdrop-blur-[16px] border border-[#e2e8f0] dark:border-[rgba(255,255,255,0.08)] rounded-2xl shadow-sm;
+  }
+
+  .bento-card-interactive {
+    @apply hover:-translate-y-1 hover:shadow-md hover:border-slate-400 dark:hover:border-coral-orange/40 hover:shadow-slate-200/50 dark:hover:shadow-coral-orange/10 cursor-pointer transition-all duration-300;
+  }
+
+  .ui-input {
+    @apply w-full bg-light-canvas dark:bg-obsidian-black border border-light-border dark:border-border-gray rounded-xl px-4 py-2.5 text-sm text-light-heading dark:text-white focus:outline-none focus:ring-2 focus:ring-coral-orange transition-colors;
+  }
+
+  .ui-button {
+    @apply bg-coral-orange text-white font-bold rounded-xl px-4 py-2.5 hover:opacity-90 hover:scale-[1.02] hover:brightness-110 transition-all duration-300 flex items-center justify-center gap-2 shadow-sm shadow-coral-orange/20;
+  }
+  
+  .ui-button-secondary {
+    @apply bg-light-canvas dark:bg-obsidian-black border border-light-border dark:border-border-gray text-light-heading dark:text-white font-bold rounded-xl px-4 py-2.5 hover:bg-slate-100 dark:hover:bg-[#1f2023]/80 hover:scale-[1.02] transition-all duration-300 flex items-center justify-center gap-2;
   }
 }

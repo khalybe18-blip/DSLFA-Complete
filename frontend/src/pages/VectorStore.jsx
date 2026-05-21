@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Database, FileText, Search, Loader2, Hash, ChevronDown, ChevronRight, Zap } from 'lucide-react';
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+
 const VectorStore = () => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -16,7 +18,7 @@ const VectorStore = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('http://localhost:5000/api/ai/vectorstore');
+      const response = await axios.get(`${API_BASE}/api/ai/vectorstore`);
       setData(response.data);
     } catch (err) {
       setError('Failed to load vector store data');
@@ -42,7 +44,7 @@ const VectorStore = () => {
     setSearchResults(null);
     
     try {
-      const response = await axios.post('http://localhost:5000/api/ai/vectorstore/search', {
+      const response = await axios.post(`${API_BASE}/api/ai/vectorstore/search`, {
         query: searchQuery,
         top_k: 5
       });

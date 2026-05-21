@@ -18,7 +18,7 @@ const QuizResults = ({ quizData, results, onRetry }) => {
     <div className="max-w-4xl mx-auto space-y-8 pb-12">
       
       {/* Score Header Card */}
-      <div className="bg-white dark:bg-slate-800 p-8 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm text-center transition-colors">
+      <div className="bento-card p-8 shadow-sm text-center transition-colors">
         <Award className={`w-16 h-16 mx-auto mb-4 ${color}`} />
         <h1 className="text-3xl font-bold dark:text-white mb-2 transition-colors">{message}</h1>
         <p className="text-slate-500 dark:text-slate-400 mb-6 max-w-md mx-auto">
@@ -50,7 +50,7 @@ const QuizResults = ({ quizData, results, onRetry }) => {
         <h2 className="text-2xl font-bold dark:text-white mb-6">Detailed Review</h2>
         
         {gradedQuestions.map((q, i) => (
-          <div key={q.id} className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6 shadow-sm transition-colors">
+          <div key={q.id} className="bento-card p-6 shadow-sm transition-colors">
             <div className="flex items-start gap-4 mb-4">
               <div className="mt-1">
                 {q.isCorrect === true && <CheckCircle className="text-emerald-500" size={24} />}

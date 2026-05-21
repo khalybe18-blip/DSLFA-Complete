@@ -1,17 +1,13 @@
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
-import Navbar from './Navbar';
 
 const Layout = () => {
   return (
-    <div className="flex h-screen bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-sans transition-colors">
+    <div className="flex h-screen bg-[#f8fafc] dark:bg-obsidian-black text-slate-900 dark:text-slate-100 font-sans transition-colors p-4 md:p-6 gap-6">
       <Sidebar />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <Navbar />
-        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 dark:bg-slate-900/50 p-6 transition-colors">
-          <Outlet />
-        </main>
-      </div>
+      <main className="flex-1 overflow-x-hidden overflow-y-auto bg-transparent transition-colors">
+        <Outlet />
+      </main>
     </div>
   );
 };

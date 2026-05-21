@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Calendar, Bell, Plus, Trash2, Clock, MapPin, X } from 'lucide-react';
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+
 const Reminders = () => {
   const [reminders, setReminders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -19,7 +21,7 @@ const Reminders = () => {
 
   const fetchReminders = async () => {
     try {
-      const res = await axios.get('http://localhost:5000/api/reminders');
+      const res = await axios.get(`${API_BASE}/api/reminders`);
       setReminders(res.data.reminders || []);
     } catch (e) {
       console.error('Error fetching reminders', e);
@@ -36,7 +38,7 @@ const Reminders = () => {
     const combinedDate = new Date(`${date}T${time}`).toISOString();
 
     try {
-      const res = await axios.post('http://localhost:5000/api/reminders', {
+      const res = await axios.post(`${API_BASE}/api/reminders`, {
         title,
         date: combinedDate,
         description
@@ -56,7 +58,7 @@ const Reminders = () => {
   const handleDelete = async (id) => {
     if (!window.confirm("Delete this reminder?")) return;
     try {
-      await axios.delete(`http://localhost:5000/api/reminders/${id}`);
+      await axios.delete(`${API_BASE}/api/reminders/${id}`);
       setReminders(reminders.filter(r => r.id !== id));
     } catch (e) {
       console.error('Failed to delete', e);
@@ -86,7 +88,7 @@ const Reminders = () => {
         </div>
         <button
           onClick={() => setIsAdding(true)}
-          className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white font-semibold rounded-xl shadow-md hover:bg-blue-700 transition-colors"
+          className="ui-button"
         >
           <Plus size={18} /> Add Event
         </button>
@@ -149,7 +151,7 @@ const Reminders = () => {
       {loading ? (
         <div className="flex justify-center py-20"><div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div></div>
       ) : reminders.length === 0 ? (
-        <div className="text-center py-20 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700">
+        <div className="bento-card text-center py-20">
           <Calendar className="mx-auto text-slate-300 dark:text-slate-600 mb-4" size={48} />
           <h3 className="text-lg font-semibold dark:text-white mb-1">No upcoming exams</h3>
           <p className="text-slate-500 dark:text-slate-400 text-sm">Add your exam dates to help the AI tutor tailor your study plan.</p>
@@ -169,7 +171,7 @@ const Reminders = () => {
                   const isSoon = (d - now) < (7 * 24 * 60 * 60 * 1000); // Less than 7 days
                   
                   return (
-                    <div key={r.id} className="group relative bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5 shadow-sm hover:shadow-md transition-all flex items-start gap-4">
+                    <div key={r.id} className="bento-card group relative p-5 hover:-translate-y-1 transition-all flex items-start gap-4">
                       {isSoon && <div className="absolute left-0 top-0 bottom-0 w-1 bg-red-500 rounded-l-xl"></div>}
                       
                       <div className="flex-shrink-0 w-16 h-16 bg-blue-50 dark:bg-blue-900/30 rounded-xl border border-blue-100 dark:border-blue-800 flex flex-col items-center justify-center text-blue-700 dark:text-blue-400">
@@ -208,7 +210,7 @@ const Reminders = () => {
                 {sortedReminders.past.map(r => {
                   const d = new Date(r.date);
                   return (
-                    <div key={r.id} className="bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl p-4 flex items-center justify-between">
+                    <div key={r.id} className="bento-card p-4 flex items-center justify-between">
                       <div className="flex items-center gap-4">
                         <div className="text-slate-400 font-mono text-xs w-24">{d.toLocaleDateString()}</div>
                         <h3 className="font-medium text-slate-600 dark:text-slate-400 line-through decoration-slate-300 dark:decoration-slate-600">{r.title}</h3>

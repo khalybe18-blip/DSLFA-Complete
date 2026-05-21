@@ -3,19 +3,38 @@ import axios from 'axios';
 import { 
   Send, Bot, User, Search, Database, Sparkles, 
   FileText, Loader2, AlertCircle, BookOpen, 
-  ChevronLeft, Files, Eye
+  ChevronLeft, Files, Eye, X, UploadCloud, Scan, Copy, Library
 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useUserAssets } from '../hooks/useUserAssets';
+
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
 const AiTutor = () => {
+  const { token, refreshUser } = useAuth();
+  const { documents, personalDocs, classDocs, loadingDocs, error, searchQuery, setSearchQuery, uploadDocument, copyAssetToPersonalVault } = useUserAssets();
+  
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [pipelineSteps, setPipelineSteps] = useState([]);
   
+  const [classrooms, setClassrooms] = useState([]);
+  const [selectedClassId, setSelectedClassId] = useState('');
+  const [fileBlobUrl, setFileBlobUrl] = useState(null);
+
   // Document Viewing State
-  const [documents, setDocuments] = useState([]);
   const [activeDoc, setActiveDoc] = useState(null);
-  const [loadingDocs, setLoadingDocs] = useState(true);
+  
+  // Dual-Inflow Library State
+  const [personalLibraryOpen, setPersonalLibraryOpen] = useState(false);
+  const [classroomLibraryOpen, setClassroomLibraryOpen] = useState(false);
+  const [selectedContextDocs, setSelectedContextDocs] = useState([]);
+
+  const toggleDocSelection = (id) => {
+    setSelectedContextDocs(prev => prev.includes(id) ? prev.filter(d => d !== id) : [...prev, id]);
+  };
 
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
@@ -28,20 +47,67 @@ const AiTutor = () => {
     scrollToBottom();
   }, [messages, pipelineSteps]);
 
-  // Fetch documents on mount
   useEffect(() => {
-    const fetchDocs = async () => {
+    if (!token) return;
+    axios.get(`${API_BASE}/api/v1/classrooms/`)
+      .then((res) => {
+        const list = res.data.classrooms || [];
+        setClassrooms(list);
+        if (list.length === 1) setSelectedClassId(String(list[0].class_id));
+      })
+      .catch(() => setClassrooms([]));
+  }, [token]);
+
+  useEffect(() => {
+    if (!activeDoc || !token) {
+      setFileBlobUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
+      });
+      return;
+    }
+    let cancelled = false;
+    (async () => {
       try {
-        const res = await axios.get('http://localhost:5000/api/documents');
-        setDocuments(res.data.documents || []);
-      } catch (err) {
-        console.error('Failed to fetch documents', err);
-      } finally {
-        setLoadingDocs(false);
+        const res = await axios.get(`${API_BASE}/api/documents/${activeDoc.id}/file`, { responseType: 'blob' });
+        if (cancelled) return;
+        setFileBlobUrl((prev) => {
+          if (prev) URL.revokeObjectURL(prev);
+          return URL.createObjectURL(res.data);
+        });
+      } catch {
+        if (!cancelled) {
+          setFileBlobUrl((prev) => {
+            if (prev) URL.revokeObjectURL(prev);
+            return null;
+          });
+        }
       }
+    })();
+    return () => {
+      cancelled = true;
     };
-    fetchDocs();
-  }, []);
+  }, [activeDoc, token]);
+
+  const handleTutorUpload = async (e) => {
+    if (e.target.files && e.target.files[0]) {
+      const docData = await uploadDocument(e.target.files[0]);
+      if (docData && docData.document) {
+         setSelectedContextDocs(prev => [...prev, docData.document.id]);
+      }
+    }
+    e.target.value = '';
+  };
+
+  const handleClassroomImport = async (docId) => {
+      const newDoc = await copyAssetToPersonalVault(docId);
+      if (newDoc) {
+         setSelectedContextDocs(prev => [...prev, newDoc.id]);
+         setClassroomLibraryOpen(false);
+      }
+  };
+
+  // Fetch documents on mount - removed, handled by useUserAssets
 
   const handleSend = async (e) => {
     e.preventDefault();
@@ -51,6 +117,19 @@ const AiTutor = () => {
     setInput('');
     setLoading(true);
     setPipelineSteps([]);
+
+    if (!selectedClassId) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: 'Select a class above so the tutor can search only that class\'s materials.',
+          isError: true,
+        },
+      ]);
+      setLoading(false);
+      return;
+    }
 
     // Add user message to chat
     const newMessages = [...messages, { role: 'user', content: userMessage }];
@@ -63,12 +142,31 @@ const AiTutor = () => {
     }));
 
     try {
-      // Use the streaming SSE endpoint
-      const response = await fetch('http://localhost:5000/api/ai/chat/stream', {
+      // Use the streaming SSE endpoint (JWT + class-scoped RAG)
+      const response = await fetch(`${API_BASE}/api/ai/chat/stream`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: userMessage, history: history.slice(0, -1) })
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          message: userMessage,
+          history: history.slice(0, -1),
+          class_id: Number(selectedClassId),
+        }),
       });
+
+      if (!response.ok) {
+        let errText = `Request failed (${response.status})`;
+        try {
+          const j = await response.json();
+          errText = j.message || errText;
+        } catch { /* ignore */ }
+        setMessages((prev) => [...prev, { role: 'assistant', content: errText, isError: true }]);
+        setPipelineSteps([]);
+        setLoading(false);
+        return;
+      }
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
@@ -122,9 +220,12 @@ const AiTutor = () => {
       setPipelineSteps([]);
     } finally {
       setLoading(false);
+      refreshUser();
       inputRef.current?.focus();
     }
   };
+
+  const cardStyle = "bg-[#ffffff] dark:bg-[rgba(30,41,59,0.45)] dark:backdrop-blur-[16px] border border-[#e2e8f0] dark:border-[rgba(255,255,255,0.08)]";
 
   return (
     <div className="h-[calc(100vh-4rem)] max-w-[1400px] mx-auto w-full p-4 lg:p-6 transition-colors">
@@ -133,63 +234,177 @@ const AiTutor = () => {
         {/* ================================== */}
         {/* LEFT PANEL: Document Source Viewer */}
         {/* ================================== */}
-        <div className="lg:col-span-4 lg:flex flex-col h-full hidden lg:visible bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden transition-colors">
+        <div className={`lg:col-span-4 lg:flex flex-col h-full hidden lg:visible ${cardStyle} rounded-2xl shadow-[0_4px_12px_rgba(0,0,0,0.03)] dark:shadow-none overflow-hidden transition-colors relative`}>
           
           {/* Doc Header */}
-          <div className="p-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80">
+          <div className="p-4 border-b border-[#e2e8f0] dark:border-[rgba(255,255,255,0.08)] bg-[#f8fafc] dark:bg-[rgba(10,13,20,0.5)]">
             {activeDoc ? (
               <button 
                 onClick={() => setActiveDoc(null)}
-                className="flex items-center gap-1.5 text-sm font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 transition-colors"
+                className="flex items-center gap-1.5 text-sm font-semibold text-[#64748b] dark:text-[#94a3b8] hover:text-[#0f172a] dark:hover:text-[#f1f5f9] transition-colors"
               >
                 <ChevronLeft size={16} /> Back to Files
               </button>
             ) : (
-              <h2 className="font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                <Files size={18} className="text-blue-500" /> Reference Files
+              <h2 className="font-bold text-[#0f172a] dark:text-[#f1f5f9] flex items-center gap-2">
+                <Files size={18} className="text-[#64748b] dark:text-[#94a3b8]" /> Tutor Context
               </h2>
             )}
           </div>
 
           {/* Doc Body */}
           <div className="flex-1 overflow-hidden relative">
+            
+
+            {/* Drawer for Personal Library */}
+            <AnimatePresence>
+              {personalLibraryOpen && !activeDoc && (
+                 <motion.div 
+                    initial={{ x: '-100%', opacity: 0 }}
+                    animate={{ x: 0, opacity: 1 }}
+                    exit={{ x: '-100%', opacity: 0 }}
+                    transition={{ stiffness: 180, damping: 22 }}
+                    className="absolute inset-0 bg-white dark:bg-[rgba(22,28,45,0.45)] dark:backdrop-blur-[20px] border-r border-[#e2e8f0] dark:border-[rgba(255,255,255,0.08)] z-20 flex flex-col"
+                 >
+                    <div className="p-4 border-b border-[#e2e8f0] dark:border-[rgba(255,255,255,0.08)] flex justify-between items-center bg-[#f8fafc] dark:bg-[rgba(10,13,20,0.5)]">
+                       <h3 className="font-bold text-sm text-[#0f172a] dark:text-[#f1f5f9]">Personal Vault</h3>
+                       <button onClick={() => setPersonalLibraryOpen(false)} className="text-[#64748b] hover:text-[#0f172a] dark:hover:text-[#f1f5f9] transition-colors">
+                         <X size={16}/>
+                       </button>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                       {personalDocs.map(doc => (
+                          <label key={doc.id} className="flex items-center gap-3 p-3 rounded-xl border border-[#e2e8f0] dark:border-[rgba(255,255,255,0.08)] cursor-pointer hover:bg-[#f8fafc] dark:hover:bg-[rgba(255,255,255,0.05)] transition-colors group">
+                             <input 
+                                type="checkbox" 
+                                checked={selectedContextDocs.includes(doc.id)} 
+                                onChange={() => toggleDocSelection(doc.id)}
+                                className="accent-[#ff6b35] w-4 h-4 cursor-pointer"
+                             />
+                             <div className="min-w-0 flex-1">
+                                <p className="text-sm font-bold text-[#0f172a] dark:text-[#f1f5f9] truncate group-hover:text-[#ff6b35] transition-colors">{doc.title}</p>
+                                <p className="text-[10px] text-[#64748b] dark:text-[#94a3b8] uppercase font-bold mt-0.5">{doc.file_type}</p>
+                             </div>
+                          </label>
+                       ))}
+                       {personalDocs.length === 0 && (
+                         <div className="text-center p-8 text-[#64748b] dark:text-[#94a3b8]">
+                           <p className="text-sm">No personal notes found.</p>
+                         </div>
+                       )}
+                    </div>
+                    {selectedContextDocs.length > 0 && (
+                       <div className="p-4 border-t border-[#e2e8f0] dark:border-[rgba(255,255,255,0.08)] bg-[#f8fafc] dark:bg-[rgba(10,13,20,0.5)]">
+                          <button onClick={() => setPersonalLibraryOpen(false)} className="w-full bg-[#ff6b35] text-white py-3 rounded-xl text-sm font-bold shadow-lg shadow-[#ff6b35]/20 hover:brightness-110 transition-all">
+                             Attach {selectedContextDocs.length} Asset(s)
+                          </button>
+                       </div>
+                    )}
+                 </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Drawer for Classroom Import */}
+            <AnimatePresence>
+              {classroomLibraryOpen && !activeDoc && (
+                 <motion.div 
+                    initial={{ x: '-100%', opacity: 0 }}
+                    animate={{ x: 0, opacity: 1 }}
+                    exit={{ x: '-100%', opacity: 0 }}
+                    transition={{ stiffness: 180, damping: 22 }}
+                    className="absolute inset-0 bg-white dark:bg-[rgba(22,28,45,0.45)] dark:backdrop-blur-[20px] border-r border-[#e2e8f0] dark:border-[rgba(255,255,255,0.08)] z-20 flex flex-col"
+                 >
+                    <div className="p-4 border-b border-[#e2e8f0] dark:border-[rgba(255,255,255,0.08)] flex justify-between items-center bg-[#f8fafc] dark:bg-[rgba(10,13,20,0.5)]">
+                       <h3 className="font-bold text-sm text-[#0f172a] dark:text-[#f1f5f9]">Import Classroom Notes</h3>
+                       <button onClick={() => setClassroomLibraryOpen(false)} className="text-[#64748b] hover:text-[#0f172a] dark:hover:text-[#f1f5f9] transition-colors">
+                         <X size={16}/>
+                       </button>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                       {classDocs.map(doc => (
+                          <button 
+                            key={doc.id} 
+                            onClick={() => handleClassroomImport(doc.id)}
+                            className="w-full flex items-center justify-between p-3 rounded-xl border border-[#e2e8f0] dark:border-[rgba(255,255,255,0.08)] hover:border-[#ff6b35]/50 hover:bg-[#f8fafc] dark:hover:bg-[rgba(255,255,255,0.05)] transition-colors group"
+                          >
+                             <div className="min-w-0 flex-1 text-left">
+                                <p className="text-sm font-bold text-[#0f172a] dark:text-[#f1f5f9] truncate group-hover:text-[#ff6b35] transition-colors">{doc.title}</p>
+                                <p className="text-[10px] text-[#64748b] dark:text-[#94a3b8] uppercase font-bold mt-0.5">{doc.file_type}</p>
+                             </div>
+                             <Copy size={14} className="text-[#64748b] group-hover:text-[#ff6b35]" />
+                          </button>
+                       ))}
+                       {classDocs.length === 0 && (
+                         <div className="text-center p-8 text-[#64748b] dark:text-[#94a3b8]">
+                           <p className="text-sm">No classroom notes available to import.</p>
+                         </div>
+                       )}
+                    </div>
+                 </motion.div>
+              )}
+            </AnimatePresence>
+
             {activeDoc ? (
               <iframe 
-                src={`http://localhost:5000/api/documents/${activeDoc.id}/file`}
-                className="w-full h-full border-none bg-slate-100 dark:bg-slate-900"
+                src={fileBlobUrl || 'about:blank'}
+                className="w-full h-full border-none bg-white dark:bg-[#0a0d14]"
                 title={activeDoc.title}
               />
             ) : (
-              <div className="p-4 space-y-3 overflow-y-auto h-full">
-                <p className="text-sm text-slate-500 dark:text-slate-400 mb-4 px-1">
-                  Open a document below to read along while you chat with our AI Tutor.
-                </p>
-                {loadingDocs ? (
-                  <div className="flex justify-center p-8"><Loader2 className="animate-spin text-blue-500" size={24} /></div>
-                ) : documents.length === 0 ? (
-                  <div className="text-center p-8 text-slate-400 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl">
-                    <BookOpen className="mx-auto mb-2 opacity-50" size={24} />
-                    <p className="text-sm">No documents uploaded</p>
-                  </div>
-                ) : (
-                  documents.map((doc) => (
-                    <button
-                      key={doc.id}
-                      onClick={() => setActiveDoc(doc)}
-                      className="w-full text-left p-3 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-500 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-all group flex items-start justify-between gap-3"
+              <div className="p-4 space-y-6 overflow-y-auto h-full">
+                
+                {/* Multi-Inflow Ingestion Control Split */}
+                <div className="space-y-3">
+                  <label className="w-full py-4 px-4 bg-[#f8fafc] dark:bg-[rgba(22,28,45,0.45)] dark:backdrop-blur-[20px] border border-[#e2e8f0] dark:border-[rgba(255,255,255,0.08)] rounded-2xl flex items-center gap-4 cursor-pointer hover:border-[#ff6b35]/50 group transition-all shadow-[0_4px_12px_rgba(0,0,0,0.01)]">
+                     <div className="w-10 h-10 rounded-xl bg-white dark:bg-[rgba(255,255,255,0.05)] flex items-center justify-center shrink-0 border border-[#e2e8f0] dark:border-[rgba(255,255,255,0.08)] group-hover:bg-[#ff6b35]/10 group-hover:border-[#ff6b35]/30 transition-colors">
+                       <UploadCloud size={20} className="text-[#64748b] dark:text-[#94a3b8] group-hover:text-[#ff6b35] transition-colors" />
+                     </div>
+                     <div className="flex-1 text-left min-w-0">
+                       <p className="text-sm font-black text-[#0f172a] dark:text-[#f1f5f9] group-hover:text-[#ff6b35] transition-colors flex items-center">
+                         <UploadCloud className="w-4 h-4 mr-2" /> Upload from Device
+                       </p>
+                       <p className="text-[10px] text-[#64748b] dark:text-[#94a3b8] font-bold uppercase tracking-wide mt-0.5">Supports PDF, DOCX, TXT</p>
+                     </div>
+                     <input type="file" className="hidden" accept=".pdf,.docx,.txt" onChange={handleTutorUpload} />
+                  </label>
+
+                  <label className="w-full py-4 px-4 bg-[#f8fafc] dark:bg-[rgba(22,28,45,0.45)] dark:backdrop-blur-[20px] border border-[#e2e8f0] dark:border-[rgba(255,255,255,0.08)] rounded-2xl flex items-center gap-4 cursor-pointer hover:border-[#ff6b35]/50 group transition-all shadow-[0_4px_12px_rgba(0,0,0,0.01)]">
+                     <div className="w-10 h-10 rounded-xl bg-white dark:bg-[rgba(255,255,255,0.05)] flex items-center justify-center shrink-0 border border-[#e2e8f0] dark:border-[rgba(255,255,255,0.08)] group-hover:bg-[#ff6b35]/10 group-hover:border-[#ff6b35]/30 transition-colors">
+                       <Scan size={20} className="text-[#64748b] dark:text-[#94a3b8] group-hover:text-[#ff6b35] transition-colors" />
+                     </div>
+                     <div className="flex-1 text-left min-w-0">
+                       <p className="text-sm font-black text-[#0f172a] dark:text-[#f1f5f9] group-hover:text-[#ff6b35] transition-colors flex items-center">
+                         <FileText className="w-4 h-4 mr-2" /> Add Handwritten Notes
+                       </p>
+                       <p className="text-[10px] text-[#64748b] dark:text-[#94a3b8] font-bold uppercase tracking-wide mt-0.5">Camera & Photo Upload</p>
+                     </div>
+                     <input type="file" className="hidden" accept=".png,.jpg,.jpeg" onChange={handleTutorUpload} />
+                  </label>
+
+                  <button 
+                    onClick={() => setClassroomLibraryOpen(true)}
+                    className="w-full py-4 px-4 bg-[#f8fafc] dark:bg-[rgba(22,28,45,0.45)] dark:backdrop-blur-[20px] border border-[#e2e8f0] dark:border-[rgba(255,255,255,0.08)] rounded-2xl flex items-center gap-4 cursor-pointer hover:border-[#ff6b35]/50 group transition-all shadow-[0_4px_12px_rgba(0,0,0,0.01)]"
+                  >
+                     <div className="w-10 h-10 rounded-xl bg-white dark:bg-[rgba(255,255,255,0.05)] flex items-center justify-center shrink-0 border border-[#e2e8f0] dark:border-[rgba(255,255,255,0.08)] group-hover:bg-[#ff6b35]/10 group-hover:border-[#ff6b35]/30 transition-colors">
+                       <BookOpen size={20} className="text-[#64748b] dark:text-[#94a3b8] group-hover:text-[#ff6b35] transition-colors" />
+                     </div>
+                     <div className="flex-1 text-left min-w-0">
+                       <p className="text-sm font-black text-[#0f172a] dark:text-[#f1f5f9] group-hover:text-[#ff6b35] transition-colors flex items-center">
+                         <Library className="w-4 h-4 mr-2" /> Import via Classroom Notes
+                       </p>
+                       <p className="text-[10px] text-[#64748b] dark:text-[#94a3b8] font-bold uppercase tracking-wide mt-0.5">Teacher-shared Docs</p>
+                     </div>
+                  </button>
+                  
+                  <div className="pt-4 flex justify-center">
+                    <button 
+                      onClick={() => setPersonalLibraryOpen(true)}
+                      className="text-xs font-bold text-[#64748b] dark:text-[#94a3b8] hover:text-[#ff6b35] transition-colors"
                     >
-                      <div className="min-w-0">
-                        <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate pr-2 group-hover:text-blue-600 dark:group-hover:text-blue-400">
-                          {doc.title}
-                        </h4>
-                        <span className="text-[10px] uppercase font-bold text-slate-400 block mt-1">{doc.file_type} File</span>
-                      </div>
-                      <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0 group-hover:bg-blue-100 dark:group-hover:bg-blue-900/40 transition-colors">
-                        <Eye size={14} className="text-slate-400 group-hover:text-blue-600 dark:group-hover:text-blue-400" />
-                      </div>
+                      Browse existing Personal Vault →
                     </button>
-                  ))
-                )}
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -198,20 +413,35 @@ const AiTutor = () => {
         {/* ================================== */}
         {/* RIGHT PANEL: AI Tutor Chat         */}
         {/* ================================== */}
-        <div className="lg:col-span-8 flex flex-col h-full bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden transition-colors relative">
+        <div className={`lg:col-span-8 flex flex-col h-full ${cardStyle} rounded-2xl shadow-[0_4px_12px_rgba(0,0,0,0.03)] dark:shadow-none overflow-hidden transition-colors relative`}>
           
           {/* Chat Header */}
-          <div className="flex z-10 items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 backdrop-blur block shadow-sm w-full">
+          <div className="flex z-10 flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 backdrop-blur block shadow-sm w-full">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
                 <Bot className="text-white" size={22} />
               </div>
-              <div className="flex flex-col">
+              <div className="flex flex-col min-w-0">
                 <h1 className="text-lg font-bold text-slate-900 dark:text-white leading-tight">Interactive Tutor</h1>
-                <p className="text-xs text-slate-500 dark:text-slate-400 leading-tight mt-0.5">Powered by local RAG engine</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 leading-tight mt-0.5">Class-scoped RAG — select a class you teach or are enrolled in</p>
               </div>
             </div>
-            <div className="hidden sm:flex items-center gap-2 text-xs text-slate-400">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full sm:w-auto">
+              <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide shrink-0">Class context</label>
+              <select
+                value={selectedClassId}
+                onChange={(e) => setSelectedClassId(e.target.value)}
+                className="text-sm rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-white px-3 py-2 min-w-0 flex-1 sm:max-w-xs focus:ring-2 focus:ring-blue-500/30 outline-none"
+              >
+                <option value="">Select a class…</option>
+                {classrooms.map((c) => (
+                  <option key={c.class_id} value={String(c.class_id)}>
+                    {c.class_name} (ID {c.class_id})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="hidden sm:flex items-center gap-2 text-xs text-slate-400 shrink-0">
               <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div> Online
             </div>
           </div>
@@ -225,7 +455,7 @@ const AiTutor = () => {
                 </div>
                 <h2 className="text-xl font-bold text-slate-800 dark:text-slate-200 mb-2">Ask me anything about your studies</h2>
                 <p className="text-sm text-slate-500 dark:text-slate-400 max-w-sm mb-8">
-                  I can answer questions using your uploaded notes. I'll read your context files dynamically!
+                  Choose your class above, then ask questions. The tutor only searches materials for that class.
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-lg">
                   {[

@@ -1,0 +1,5 @@
+This is a test resource for the edtech platform.
+It contains information about AI and education.
+RAG (Retrieval-Augmented Generation) is a technique used to provide LLMs with relevant context.
+In this classroom, we focus on advanced AI concepts.
+The capital of France is Paris. (Just for testing retrieval)
