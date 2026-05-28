@@ -8,6 +8,7 @@ import QuizDashboard from './pages/QuizDashboard';
 import FlashcardDashboard from './pages/FlashcardDashboard';
 import Dashboard from './pages/Dashboard';
 import Reminders from './pages/Reminders';
+import Resources from './pages/Resources';
 
 function App() {
   return (
@@ -22,6 +23,7 @@ function App() {
           <Route path="flashcards" element={<FlashcardDashboard />} />
           <Route path="vectorstore" element={<VectorStore />} />
           <Route path="reminders" element={<Reminders />} />
+          <Route path="resources" element={<Resources />} />
         </Route>
       </Routes>
     </Router>

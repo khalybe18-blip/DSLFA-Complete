@@ -24,6 +24,8 @@ def create_app():
         from app.models.saved_quiz import SavedQuiz
         from app.models.saved_deck import SavedDeck
         from app.models.reminder import Reminder
+        from app.models.external_resource import ExternalResource
+        from app.models.chat import ChatSession, ChatMessage
         
         # Create all tables (SQLite for MVP)
         db.create_all()
@@ -34,12 +36,14 @@ def create_app():
     from app.routes.quiz import quiz_bp
     from app.routes.flashcards import flashcards_bp
     from app.routes.reminders import reminders_bp
+    from app.routes.resources import resources_bp
     
     app.register_blueprint(docs_bp, url_prefix='/api/documents')
     app.register_blueprint(ai_bp, url_prefix='/api/ai')
     app.register_blueprint(quiz_bp, url_prefix='/api/quiz')
     app.register_blueprint(flashcards_bp, url_prefix='/api/flashcards')
     app.register_blueprint(reminders_bp, url_prefix='/api/reminders')
+    app.register_blueprint(resources_bp, url_prefix='/api/resources')
     
     @app.route('/health')
     def health():

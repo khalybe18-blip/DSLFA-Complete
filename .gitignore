@@ -3,6 +3,9 @@ node_modules/
 dist/
 build/
 .env.local
+.env
+.env/
+
 
 # Python dependencies
 venv/
@@ -21,3 +24,8 @@ uploads/
 # OS generated files
 .DS_Store
 Thumbs.db
+
+# Tool generated files
+.antigravity/
+.antigravitycli/
+

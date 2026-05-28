@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { Home, BookOpen, FileText, BrainCircuit, Database, MessageSquare, Bell } from 'lucide-react';
+import { Home, BookOpen, FileText, BrainCircuit, Database, MessageSquare, Bell, Globe } from 'lucide-react';
 
 const Sidebar = () => {
   const routes = [
@@ -9,6 +9,7 @@ const Sidebar = () => {
     { name: 'Quizzes', path: '/quizzes', icon: <BrainCircuit size={20} /> },
     { name: 'Reminders', path: '/reminders', icon: <Bell size={20} /> },
     { name: 'AI Tutor', path: '/tutor', icon: <MessageSquare size={20} /> },
+    { name: 'Resources', path: '/resources', icon: <Globe size={20} /> },
     { name: 'Vector Store', path: '/vectorstore', icon: <Database size={20} /> },
   ];
 
